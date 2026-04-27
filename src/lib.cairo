@@ -93,18 +93,17 @@ mod SimpleStorage {
             self.balances.entry(caller).write(current_balance + amount);
         }
 
-       fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u128){
-        let caller = get_caller_address();
-        let callerBalance = self.balances.entry(caller).read();
-        assert(callerBalance >= amount, 'Insufficient balance');
-        let newBalance = callerBalance - amount;
-        self.balances.entry(caller).write(newBalance);
-        let recipientBalance = self.balances.entry(recipient).read() + amount;
-        self.balances.entry(recipient).write(recipientBalance);
-       }
+        fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u128){
+            let caller = get_caller_address();
+            let caller_balance = self.balances.entry(caller).read();
+            assert(caller_balance >= amount, 'Insufficient balance');
+            let new_balance = caller_balance - amount;
+            self.balances.entry(caller).write(new_balance);
+            let recipient_balance = self.balances.entry(recipient).read() + amount;
+            self.balances.entry(recipient).write(recipient_balance);
+        }
 
-    }
-}
+    }}
 
 #[cfg(test)]
 mod tests {
