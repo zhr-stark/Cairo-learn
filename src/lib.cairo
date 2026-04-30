@@ -1,6 +1,7 @@
 // Импортируем необходимые трейты (интерфейсы) для работы с хранилищем
 use starknet::{ContractAddress, get_caller_address};
-use starknet::storage::{Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess};
+use starknet::storage::{Map, StoragePathEntry, StoragePointerReadAccess,
+StoragePointerWriteAccess, Vec, VecTrait, MutableVecTrait,};
 
 
 #[starknet::interface]
@@ -11,12 +12,15 @@ trait ISimpleStorage<TState> {
     fn increase_by(self: @TState, amount: u128) -> u128;
     fn deposit(ref self: TState, amount: u128);
     fn transfer(ref self: TState, recipient: ContractAddress, amount: u128);
+    fn get_history_entry(self: @TState, index: u64) -> u128;
+    fn get_history_last(self: @TState) -> u128;
 }
 
 #[starknet::contract]
 mod SimpleStorage {
     // Подтягиваем импорты внутрь модуля контракта
-    use super::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry};
+    use super::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
+   Vec, VecTrait, MutableVecTrait,};
     use super::{ContractAddress, get_caller_address};
     use starknet::event::EventEmitter;
 
@@ -27,12 +31,13 @@ mod SimpleStorage {
         stored_data: u128,
         owner: ContractAddress,
         balances: Map<ContractAddress, u128>,
-
+        history: Vec<u128>,
     }
 
     #[constructor]
     fn constructor(ref self: ContractState, initial_value: u128) {
         self.stored_data.write(initial_value);
+        self.history.push(initial_value);
         let deployer = get_caller_address();
         self.owner.write(deployer);
     }
@@ -59,6 +64,7 @@ mod SimpleStorage {
             let old = self.stored_data.read();
             // Теперь метод write доступен
             self.stored_data.write(x);
+            self.history.push(x);
             self.emit(DataChanged { old_value: old, new_value: x });
 
         }
@@ -69,12 +75,16 @@ mod SimpleStorage {
         }
 
         fn increment(ref self: ContractState){
+            let owner = self.owner.read();
+            let caller = get_caller_address();
+            assert(owner == caller, 'Only owner can call this fn');
             // читаем текущее число
             let current = self.stored_data.read();
 
             let next = current + 1;
 
             self.stored_data.write(next);
+            self.history.push(next);
             self.emit(DataChanged {old_value: current, new_value: next});
         }
 
@@ -103,7 +113,20 @@ mod SimpleStorage {
             self.balances.entry(recipient).write(recipient_balance);
         }
 
-    }}
+       fn get_history_entry(self: @ContractState, index: u64) -> u128 {
+        assert(index < self.history.len(), 'index does not exist');
+        self.history.at(index).read()
+       }
+
+       fn get_history_last(self: @ContractState) -> u128 {
+        let len = self.history.len();
+        assert(len >= 1, 'history is empty');
+        self.history.at(len - 1).read()
+       }
+
+
+
+}}
 
 #[cfg(test)]
 mod tests {
