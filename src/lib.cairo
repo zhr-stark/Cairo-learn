@@ -12,8 +12,8 @@ trait ISimpleStorage<TState> {
     fn increase_by(self: @TState, amount: u128) -> u128;
     fn deposit(ref self: TState, amount: u128);
     fn transfer(ref self: TState, recipient: ContractAddress, amount: u128);
-    fn get_history_entry(self: @TState, index: u64) -> u128;
-    fn get_history_last(self: @TState) -> u128;
+    fn rollback(ref self: TState, index: u64);
+    fn get_full_history(self: @TState, index: u64) -> SimpleStorage::AuditRecord;
 }
 
 #[starknet::contract]
@@ -23,6 +23,7 @@ mod SimpleStorage {
    Vec, VecTrait, MutableVecTrait,};
     use super::{ContractAddress, get_caller_address};
     use starknet::event::EventEmitter;
+    use starknet::get_block_timestamp;
 
     #[storage]
     struct Storage {
@@ -31,15 +32,18 @@ mod SimpleStorage {
         stored_data: u128,
         owner: ContractAddress,
         balances: Map<ContractAddress, u128>,
-        history: Vec<u128>,
+        history: Vec<AuditRecord>,
+        last_update: u64,
     }
 
     #[constructor]
     fn constructor(ref self: ContractState, initial_value: u128) {
         self.stored_data.write(initial_value);
-        self.history.push(initial_value);
-        let deployer = get_caller_address();
-        self.owner.write(deployer);
+        let caller = get_caller_address();
+        let now = get_block_timestamp();
+        let struct_audit = AuditRecord { value: initial_value, author: caller, timestamp: now};
+        self.history.push(struct_audit);
+        self.owner.write(caller);
     }
 
     #[event]
@@ -54,8 +58,20 @@ mod SimpleStorage {
         new_value: u128,
     }
 
+    #[derive(Drop, Serde, Copy, starknet::Store)]
+       pub struct AuditRecord{
+            value: u128,
+            author: ContractAddress,
+            timestamp: u64,
+        }
+
     #[abi(embed_v0)]
     impl SimpleStorageImpl of super::ISimpleStorage<ContractState> {
+
+        fn get(self: @ContractState) -> u128 {
+            // Теперь метод read доступен
+            self.stored_data.read()
+        }
 
         fn set(ref self: ContractState, x: u128) {
             let owner = self.owner.read();
@@ -63,28 +79,29 @@ mod SimpleStorage {
             assert(owner == caller, 'Only owner can call this fn');
             let old = self.stored_data.read();
             // Теперь метод write доступен
+            let now = get_block_timestamp();
+            assert(now - self.last_update.read() > 300, 'Cooldown active');
+            let audit_record = AuditRecord { value: x, author: caller, timestamp: now };
             self.stored_data.write(x);
-            self.history.push(x);
+            self.history.push(audit_record);
+            self.last_update.write(now);
             self.emit(DataChanged { old_value: old, new_value: x });
-
-        }
-
-        fn get(self: @ContractState) -> u128 {
-            // Теперь метод read доступен
-            self.stored_data.read()
         }
 
         fn increment(ref self: ContractState){
             let owner = self.owner.read();
             let caller = get_caller_address();
+            let now = get_block_timestamp();
             assert(owner == caller, 'Only owner can call this fn');
+             assert(now - self.last_update.read() > 300, 'Cooldown active');
             // читаем текущее число
             let current = self.stored_data.read();
 
             let next = current + 1;
-
+            let audit_record = AuditRecord { value: next, author: caller, timestamp: now };
             self.stored_data.write(next);
-            self.history.push(next);
+            self.history.push(audit_record);
+            self.last_update.write(now);
             self.emit(DataChanged {old_value: current, new_value: next});
         }
 
@@ -113,19 +130,32 @@ mod SimpleStorage {
             self.balances.entry(recipient).write(recipient_balance);
         }
 
-       fn get_history_entry(self: @ContractState, index: u64) -> u128 {
-        assert(index < self.history.len(), 'index does not exist');
-        self.history.at(index).read()
-       }
+        fn get_full_history(self: @ContractState, index: u64) -> AuditRecord{
+            assert(index < self.history.len(), 'index does not exist');
+            self.history.at(index).read()
+        }
 
-       fn get_history_last(self: @ContractState) -> u128 {
-        let len = self.history.len();
-        assert(len >= 1, 'history is empty');
-        self.history.at(len - 1).read()
-       }
-
-
-
+        fn rollback(ref self: ContractState, index: u64){
+            let caller = get_caller_address();
+            let owner = self.owner.read();
+            let now = get_block_timestamp();
+            assert(caller == owner, 'Only owner can call this fn');
+            assert(now - self.last_update.read() > 300, 'Cooldown active');
+            assert(index < self.history.len(), 'index does not exist');
+            let old_value = self.stored_data.read();
+            let history_element = self.history.at(index);
+            let history_struct = AuditRecord { 
+                value: history_element.value.read(),
+                author: history_element.author.read(),
+                timestamp: now
+                 };
+            assert(history_element.value.read() != old_value, 'Already at this value');
+            self.stored_data.write(history_element.value.read());
+            self.history.push(history_struct);
+            self.last_update.write(now);
+            self.emit(DataChanged { old_value: old_value, new_value: history_struct.value });
+        }
+        
 }}
 
 #[cfg(test)]
