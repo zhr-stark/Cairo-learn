@@ -146,7 +146,7 @@ mod SimpleStorage {
             let history_element = self.history.at(index);
             let history_struct = AuditRecord { 
                 value: history_element.value.read(),
-                author: history_element.author.read(),
+                author: caller,
                 timestamp: now
                  };
             assert(history_element.value.read() != old_value, 'Already at this value');
