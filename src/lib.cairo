@@ -1,8 +1,14 @@
 // Импортируем необходимые трейты (интерфейсы) для работы с хранилищем
-use starknet::{ContractAddress, get_caller_address};
+use starknet::{ContractAddress, get_caller_address,};
 use starknet::storage::{Map, StoragePathEntry, StoragePointerReadAccess,
 StoragePointerWriteAccess, Vec, VecTrait, MutableVecTrait,};
 
+ #[derive(Drop, Serde, Copy, starknet::Store)]
+       pub struct AuditRecord{
+            value: u128,
+            author: ContractAddress,
+            timestamp: u64,
+        }
 
 #[starknet::interface]
 trait ISimpleStorage<TState> {
@@ -13,17 +19,18 @@ trait ISimpleStorage<TState> {
     fn deposit(ref self: TState, amount: u128);
     fn transfer(ref self: TState, recipient: ContractAddress, amount: u128);
     fn rollback(ref self: TState, index: u64);
-    fn get_full_history(self: @TState, index: u64) -> SimpleStorage::AuditRecord;
+    fn get_full_history(self: @TState, index: u64) -> AuditRecord;
 }
 
 #[starknet::contract]
 mod SimpleStorage {
     // Подтягиваем импорты внутрь модуля контракта
     use super::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
-   Vec, VecTrait, MutableVecTrait,};
+   Vec, VecTrait, MutableVecTrait, AuditRecord};
     use super::{ContractAddress, get_caller_address};
     use starknet::event::EventEmitter;
     use starknet::get_block_timestamp;
+
 
     #[storage]
     struct Storage {
@@ -44,6 +51,8 @@ mod SimpleStorage {
         let struct_audit = AuditRecord { value: initial_value, author: caller, timestamp: now};
         self.history.push(struct_audit);
         self.owner.write(caller);
+        let now = get_block_timestamp();
+        self.last_update.write(now);
     }
 
     #[event]
@@ -58,12 +67,7 @@ mod SimpleStorage {
         new_value: u128,
     }
 
-    #[derive(Drop, Serde, Copy, starknet::Store)]
-       pub struct AuditRecord{
-            value: u128,
-            author: ContractAddress,
-            timestamp: u64,
-        }
+   
 
     #[abi(embed_v0)]
     impl SimpleStorageImpl of super::ISimpleStorage<ContractState> {
