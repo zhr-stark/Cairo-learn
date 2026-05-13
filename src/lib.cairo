@@ -15,7 +15,6 @@ trait ISimpleStorage<TState> {
     fn set(ref self: TState, x: u128);
     fn get(self: @TState) -> u128;
     fn increment(ref self: TState);
-    fn increase_by(self: @TState, amount: u128) -> u128;
     fn deposit(ref self: TState, amount: u128);
     fn transfer(ref self: TState, recipient: ContractAddress, amount: u128);
     fn rollback(ref self: TState, index: u64);
@@ -114,11 +113,6 @@ mod SimpleStorage {
             self.history.push(audit_record);
             self.last_update.write(now);
             self.emit(DataChanged {old_value: current, new_value: next});
-        }
-
-        fn increase_by(self: @ContractState, amount: u128) -> u128 {
-            let current = self.stored_data.read();
-            current + amount
         }
 
         fn deposit(ref self: ContractState, amount: u128) {
