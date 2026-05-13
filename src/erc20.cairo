@@ -121,7 +121,7 @@ mod ERC20Contract{
         }
 
         fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool{
-              let zero_address: ContractAddress = Zero::zero();
+            let zero_address: ContractAddress = Zero::zero();
             let caller = get_caller_address();
             assert(spender != zero_address, 'address does not exist');
             assert(amount > 0, 'amount must be over zero');
