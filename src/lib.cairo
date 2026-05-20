@@ -26,8 +26,8 @@ trait ISimpleStorage<TState> {
 #[starknet::contract]
 mod SimpleStorage {
     // Подтягиваем импорты внутрь модуля контракта
-    use super::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, StoragePathEntry,
-   Vec, VecTrait, MutableVecTrait, AuditRecord};
+    use super::{Map, StoragePointerReadAccess, StoragePointerWriteAccess,
+    StoragePathEntry, Vec, VecTrait, MutableVecTrait, AuditRecord};
     use super::{ContractAddress, get_caller_address};
     use starknet::event::EventEmitter;
     use starknet::get_block_timestamp;
@@ -210,6 +210,7 @@ mod SimpleStorage {
 
         
 }}
+
 
 #[cfg(test)]
 mod tests {
