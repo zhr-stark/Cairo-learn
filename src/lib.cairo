@@ -38,8 +38,7 @@ mod SimpleStorage {
 
     #[storage]
     struct Storage {
-        // В Starknet переменные в Storage — это не просто ячейки, 
-        // а указатели на места в дереве состояния
+       
         stored_data: u128,
         owner: ContractAddress,
         balances: Map<ContractAddress, u128>,
@@ -88,7 +87,6 @@ mod SimpleStorage {
             let caller = get_caller_address();
             assert(owner == caller, 'Only owner can call this fn');
             let old = self.stored_data.read();
-            // Теперь метод write доступен
             let now = get_block_timestamp();
             assert(now - self.last_update.read() > 300, 'Cooldown active');
             let audit_record = AuditRecord { value: x, author: caller, timestamp: now };
@@ -104,7 +102,6 @@ mod SimpleStorage {
             let now = get_block_timestamp();
             assert(owner == caller, 'Only owner can call this fn');
              assert(now - self.last_update.read() > 300, 'Cooldown active');
-            // читаем текущее число
             let current = self.stored_data.read();
 
             let next = current + 1;
@@ -118,10 +115,8 @@ mod SimpleStorage {
         fn deposit(ref self: ContractState, amount: u128) {
             let caller = get_caller_address();
             
-            // Читаем из Map точно так же: передаем ключ в скобках
             let current_balance = self.balances.entry(caller).read();
             
-            // Записываем: ключ и новое значение
             self.balances.entry(caller).write(current_balance + amount);
         }
 
@@ -171,12 +166,10 @@ mod SimpleStorage {
             while i < len {
                 
                 let proof_element = *proof.at(i); 
-                 // * потому что at() возвращает ссылку
 
                  let current_u256: u256 = current.into();
                  let proof_u256: u256 = proof_element.into();
                 
-                // сортируем — меньшее это a, большее это b
                 let (a, b) = if current_u256 <= proof_u256 {
                     (current, proof_element)
                 } else {
@@ -214,9 +207,7 @@ mod SimpleStorage {
 
 #[cfg(test)]
 mod tests {
-    // Импортируем Dispatcher — через него будем вызывать функции контракта
     use super::{ISimpleStorageDispatcher, ISimpleStorageDispatcherTrait};
-    // Инструменты snforge для деплоя
     use snforge_std::{declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address, stop_cheat_caller_address,
     start_cheat_block_timestamp, stop_cheat_block_timestamp, start_cheat_caller_address_global, stop_cheat_caller_address_global,
     start_cheat_block_timestamp_global};
@@ -224,29 +215,23 @@ mod tests {
 
     const OWNER: felt252 = 0x12345;
 
-    // Эта функция не тест — просто помощник
-    // Деплоит контракт и возвращает Dispatcher
+    
     fn deploy(initial_value: u128) -> ISimpleStorageDispatcher {
         let owner: ContractAddress = OWNER.try_into().unwrap();
-        // 1. Объявляем контракт — находим его по имени
         let contract = declare("SimpleStorage").unwrap().contract_class();
         
-        // 2. Собираем аргументы конструктора в массив
-        // Наш конструктор: fn constructor(initial_value: u128, _merkle_root: felt252)
-        // initial_value = то что передаём, merkle_root = 0 (для тестов не важен)
+      
         let constructor_args = array![initial_value.into(), 0];
         
         start_cheat_caller_address_global(owner);
-        // 3. Деплоим — получаем адрес контракта
         start_cheat_block_timestamp_global(800);
         let (address, _) = contract.deploy(@constructor_args).unwrap();
         stop_cheat_caller_address_global();
 
-        // 4. Оборачиваем адрес в Dispatcher и возвращаем
         ISimpleStorageDispatcher { contract_address: address }
     }
 
-    #[test] // ← говорим Cairo: это тест, запускай его через snforge test
+    #[test] 
     fn test_get_initial_value() {
         let contract = deploy(42);
         assert(contract.get() == 42, 'should be 42');
